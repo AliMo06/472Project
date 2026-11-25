@@ -1,6 +1,6 @@
 import math
 import numpy as np
-import matplotlib
+import matplotlib.pyplot as plt
 from scipy.stats import norm
 import pandas as pd
 
@@ -19,7 +19,7 @@ def BlackScholes(SO, K, R, sigma, T):
 def S_TClosedForm(SO, R, sigma, T, Z):
     # Let the close form be expressed as ST = S_0 * e^(A + B)
     # (r - 1/2(sigma^2)) * T = A
-    A = (R - ((1/2)*(sigma))) * T
+    A = (R - ((1/2)*(sigma**2))) * T
 
     # sigma * sqrt(T) * Z = B
     B = sigma * math.sqrt(T) * Z
@@ -30,20 +30,35 @@ def S_TClosedForm(SO, R, sigma, T, Z):
     # S_0 * e^(a+b)
     return ((SO * eAB))
 
-def MonteCarlo(numSims):
-    #Results array to hold results of simulation
-    results = np.array([])
-    
-    for i in range(numSims):
-        Z = np.random.normal() 
-        results.append(S_TClosedForm(SO, R, sigma, T, Z))
+def MonteCarlo(SO, K, R, sigma, T, N):
+    #Vectorized Monte Calro by initializing Z as a numpy array of random variables where Z ~ N(0,1)
+    Z = np.random.normal(0, 1, N)
 
-    return np.mean(results)
+    ST = S_TClosedForm(SO, R, sigma, T, Z)
+
+    payoff = np.maximum(ST - K, 0)
+    discounted_payoff = np.exp(-R*T) * payoff
+    price = np.mean(discounted_payoff)
+
+    standard_error = np.std(discounted_payoff, ddof=1) / np.sqrt(N)
+    lower = price - (1.96 * standard_error)
+    upper = price + (1.96 * standard_error)
+
+    return price, standard_error, lower, upper
 
 
-data = pd.read_csv("datasets/Mercedes_Stock.csv") #Pandas reading stock data
+def StockVolatility(prices):
+    #R_t = ln(S_t/S_t-1)
 
+    Rt = np.log(prices[1:] / prices[:-1])
 
+    #sigma = std(R_t) * sqrt(252)
+    sigma = np.std(Rt, ddof=1) * np.sqrt(252)
+
+    return sigma
+
+def MakePlots():
+    print("fix")
 
 if __name__ == "__main__":
     data = pd.read_csv("datasets/Mercedes_Stock.csv")
@@ -64,10 +79,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("Invalid selection")
 
-    
-    SO, ST, K, R, sigma, T, Z, N, VO = 0, 0, 0, 0, 0, 0, 0, 0, 0 #Declaration of variables
 
-    # Example parameters
     SO = 100
     K = 105
     R = 0.05
@@ -75,11 +87,11 @@ if __name__ == "__main__":
     T = 1
     N = 100000
 
-    # Black-Scholes
+    #Calculate Volatility
+    sigma = StockVolatility(prices)
+
+    #Black-Scholes
     VO = BlackScholes(SO, K, R, sigma, T)
 
     # Monte Carlo
-    MC = MonteCarlo(N)
-
-    print("Black-Scholes Price:", VO)
-    print("Monte Carlo Expected Stock Price:", MC)
+    MC, SE, lower, upper = MonteCarlo(SO, K, R, sigma, T, N)
